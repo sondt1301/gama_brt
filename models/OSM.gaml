@@ -11,9 +11,7 @@ model OSMdata_to_shapefile
  
 global{
 	//map used to filter the object to build from the OSM file according to attributes. for an exhaustive list, see: http://wiki.openstreetmap.org/wiki/Map_Features
-	map filtering <- map(["highway"::["primary", "secondary", "tertiary", "motorway", "living_street","residential", "unclassified", "crossing", "trafic_signal;crossing"],
-		"barrier"::["height_restrictor"]
-	]);
+	map filtering <- map(["highway"::["primary", "secondary", "tertiary"]]);
 	
 	//OSM file to load
 	file<geometry> osmfile <-  file<geometry>(osm_file("../includes/map3.osm", filtering))  ;
@@ -41,10 +39,11 @@ global{
 				} else {
 					string oneway <- string(geom get ("oneway"));
 					float maxspeed_val <- float(geom get ("maxspeed"));
-					string lanes_str <- string(geom get ("lanes"));
-					int lanes_val <- empty(lanes_str) ? 1 : ((length(lanes_str) > 1) ? int(first(lanes_str)) : int(lanes_str));
+//					string lanes_str <- string(geom get ("lanes"));
+//					int lanes_val <- empty(lanes_str) ? 1 : ((length(lanes_str) > 1) ? int(first(lanes_str)) : int(lanes_str));
+					int lanes_val <- 3;
 					create road with: [shape ::geom, type:: highway_str, oneway::oneway, maxspeed::maxspeed_val, lanes::lanes_val] {
-						if lanes < 1 {lanes <- 1;} //default value for the lanes attribute
+						if lanes < 1 {lanes <- 3;} //default value for the lanes attribute
 						if maxspeed = 0 {maxspeed <- 50.0;} //default value for the maxspeed attribute
 					}
 				}	
@@ -77,8 +76,8 @@ global{
 		write "node agents filtered";
 		
 		//Save all the road agents inside the file with the path written, using the with: facet to make a link between attributes and columns of the resulting shapefiles. 
-		save road to:"../includes/map3/roads.shp" attributes:["lanes"::self.lanes, "maxspeed"::maxspeed, "oneway"::oneway] ;
-		save intersection to:"../includes/map3/nodes.shp" attributes:["type"::type, "crossing"::crossing] ;
+		save road to:"../includes/roads.shp" attributes:["lanes"::self.lanes, "maxspeed"::maxspeed, "oneway"::oneway] ;
+		save intersection to:"../includes/nodes.shp" attributes:["type"::type, "crossing"::crossing] ;
 		write "road and node shapefile saved";
 	}
 }
