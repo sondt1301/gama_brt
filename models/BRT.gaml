@@ -10,7 +10,9 @@ global {
 	
 	graph road_network;
 	
-	float prob_spawn <- 0.5;
+	float prob_spawn <- 0.3;
+	int traffic_signal_time <- 30;
+	int brt_cycle <- 200;
 	
 	init {
 		create road from: shp_roads with: [num_lanes::int(read("lanes"))] {
@@ -25,7 +27,7 @@ global {
 		
 		create intersection from: shp_nodes
 				with: [is_traffic_signal::(read("type") = "traffic_signals;crossing")] {
-			time_to_change <- 60#s;
+			time_to_change <- traffic_signal_time#s;
 		}
         
 		// Create a graph representing the road network, with road lengths as weights
@@ -47,7 +49,7 @@ global {
 	}
 	
 	reflex spawn_brt {
-		if (every(200 #cycle)) {
+		if (every(brt_cycle #cycle)) {
 			create brt_bus;
 			write "spawn bus";
 		}
@@ -57,7 +59,8 @@ global {
 species car parent: base_vehicle {
 	init {
 		vehicle_length <- 5.0 #m;
-		max_speed <- 50 #km / #h;
+		max_speed <- rnd(40, 60) #km / #h;
+		max_acceleration <- rnd(1.5, 3.5);
 		right_side_driving <- true;
 		allowed_lanes <- [0, 1, 2];
 		num_lanes_occupied <- 2;
@@ -70,13 +73,19 @@ species car parent: base_vehicle {
 	
 	reflex commute when: current_path != nil {
 		do drive;
+		
+		if (current_path = nil) {
+			do unregister;
+			do die;
+		}
 	}
 }
 
 species motorbike parent: base_vehicle {
 	init {
 		vehicle_length <- 2.0 #m;
-		max_speed <- 40 #km / #h;
+		max_speed <- rnd(30, 50) #km / #h;
+		max_acceleration <- rnd(1.5, 3.5);
 		right_side_driving <- true;
 		allowed_lanes <- [0, 1, 2, 3];
 		num_lanes_occupied <- 1;
@@ -89,6 +98,11 @@ species motorbike parent: base_vehicle {
 	
 	reflex commute when: current_path != nil {
 		do drive;
+		
+		if (current_path = nil) {
+			do unregister;
+			do die;
+		}
 	}
 }
 
@@ -96,6 +110,7 @@ species brt_bus parent: base_vehicle {
 	init {
 		vehicle_length <- 18.0 #m;
 		max_speed <- 60 #km / #h;
+		max_acceleration <- 3.5;
 		color <- #green;
 		right_side_driving <- false;
 		lowest_lane <- 4;
@@ -109,11 +124,18 @@ species brt_bus parent: base_vehicle {
 	
 	reflex commute when: current_path != nil {
 		do drive;
+		
+		if (current_path = nil) {
+			do unregister;
+			do die;
+		}
 	}
 }
 
 experiment BRT type: gui {
 	parameter "Prob spawn car/motorbike" var:prob_spawn min:0.0 max: 1.0;
+	parameter "Traffic light change time" var:traffic_signal_time min:0 max:200;
+	parameter "Number of cycles the BRT bus spawn" var:brt_cycle min:1;
 	
 	output synchronized: true {
 		display map type: 2d background: #gray {
