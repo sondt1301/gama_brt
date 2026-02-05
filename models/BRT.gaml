@@ -10,9 +10,11 @@ global {
 	
 	graph road_network;
 	
-	float prob_spawn <- 0.3;
+	int bus_stop_duration <- 5;
+	float prob_vehicle_spawn <- 0.5;
+	float prob_car_motor_spawn <- 0.3;
 	int traffic_signal_time <- 30;
-	int brt_cycle <- 200;
+	int brt_cycle <- 20;
 	
 	init {
 		create road from: shp_roads with: [num_lanes::int(read("lanes"))] {
@@ -41,10 +43,12 @@ global {
 	}
 	
 	reflex spawn_traffic {
-		if flip(prob_spawn) {
-			create car;
-		} else {
-			create motorbike;
+		if (flip(prob_vehicle_spawn)) {
+			if flip(prob_car_motor_spawn) {
+				create car;
+			} else {
+				create motorbike;
+			}
 		}
 	}
 	
@@ -64,6 +68,7 @@ species car parent: base_vehicle {
 		right_side_driving <- true;
 		allowed_lanes <- [0, 1, 2];
 		num_lanes_occupied <- 2;
+		color <- #yellow;
 	}
 	
 	reflex select_next_path when: current_path = nil {
@@ -89,6 +94,7 @@ species motorbike parent: base_vehicle {
 		right_side_driving <- true;
 		allowed_lanes <- [0, 1, 2, 3];
 		num_lanes_occupied <- 1;
+		color <- #red;
 	}
 	
 	reflex select_next_path when: current_path = nil {
@@ -107,7 +113,13 @@ species motorbike parent: base_vehicle {
 }
 
 species brt_bus parent: base_vehicle {
+	graph road_graph;        
+	int waiting <- 0;              
+	list<intersection> stops <- [intersection[124], intersection[256]];
+	int stop_index <- 0;      
+	
 	init {
+		road_graph <- road_network;
 		vehicle_length <- 18.0 #m;
 		max_speed <- 60 #km / #h;
 		max_acceleration <- 3.5;
@@ -118,11 +130,28 @@ species brt_bus parent: base_vehicle {
 	}
 	
 	reflex select_next_path when: current_path = nil {
-		list<intersection> dst_nodes <- [intersection[118], intersection[281]];
-		do compute_path graph: road_network nodes: dst_nodes;
+		// Ensure buses go through stops
+		list<intersection> dst_nodes <- [intersection[118]] + stops + [intersection[281]];
+		do compute_path graph: road_graph nodes: dst_nodes;
 	}
 	
 	reflex commute when: current_path != nil {
+		// Check if bus is at the stop
+		if (stop_index < length(stops)) {
+			intersection target_stop <- stops[stop_index];
+			if ((self.location distance_to target_stop.location) < 10) {
+				waiting <- bus_stop_duration;
+				stop_index <- stop_index + 1;
+				write "Bus stopping at stop " + target_stop.index;
+				return;
+			}
+		}
+		// If bus is at the stop, stops
+		if (waiting > 0) {
+			waiting <- waiting - 1;
+			return;
+		}
+		
 		do drive;
 		
 		if (current_path = nil) {
@@ -133,7 +162,9 @@ species brt_bus parent: base_vehicle {
 }
 
 experiment BRT type: gui {
-	parameter "Prob spawn car/motorbike" var:prob_spawn min:0.0 max: 1.0;
+	parameter "Waiting time at each bus stop" var:bus_stop_duration min:0 max:10;
+	parameter "Prob spawn for both car and motorbike at a step" var:prob_vehicle_spawn min:0.0 max: 1.0;
+	parameter "Prob spawn car/motorbike" var:prob_car_motor_spawn min:0.0 max: 1.0;
 	parameter "Traffic light change time" var:traffic_signal_time min:0 max:200;
 	parameter "Number of cycles the BRT bus spawn" var:brt_cycle min:1;
 	

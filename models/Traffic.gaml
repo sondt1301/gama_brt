@@ -1,4 +1,5 @@
 /**
+* ===== REFERENCE ===== 
 * Name: Traffic
 * Description: define species for traffic simulation
 * Author: Patrick Taillandier & Duc Pham
@@ -96,6 +97,11 @@ species intersection skills: [intersection_skill] {
 			draw circle(1) color: color_fire;
 		} else {
 			draw circle(1) color: color;
+		}
+		
+		// Define bus stops
+		if (self.index = 124 or self.index = 256) {
+			draw circle(2) color: #blue;
 		}
 	}
 }
