@@ -10,11 +10,13 @@ global {
 	
 	graph road_network;
 	
+	float seed <- 42.0;
+	bool dynamic_lane_policy <- false;
 	int bus_stop_duration <- 5;
 	float prob_vehicle_spawn <- 0.5;
 	float prob_car_motor_spawn <- 0.3;
 	int traffic_signal_time <- 30;
-	int brt_cycle <- 20;
+	int brt_cycle <- 50;
 	
 	init {
 		create road from: shp_roads with: [num_lanes::int(read("lanes"))] {
@@ -61,15 +63,27 @@ global {
 }
 
 species car parent: base_vehicle {
+	list normal_lanes <- [0, 1, 2];
+	
 	init {
 		vehicle_length <- 5.0 #m;
 		max_speed <- rnd(40, 60) #km / #h;
 		max_acceleration <- rnd(1.5, 3.5);
 		right_side_driving <- true;
-		allowed_lanes <- [0, 1, 2];
+		allowed_lanes <- normal_lanes;
 		num_lanes_occupied <- 2;
+		lane_change_limit <- 2;
 		color <- #yellow;
 	}
+	
+	reflex adapt_lane_policy when: dynamic_lane_policy {
+        bool jammed <- (real_speed < 10 #km/#h);
+        if (jammed) {
+            allowed_lanes <- [0,1,2,3,4];
+        } else {
+            allowed_lanes <- normal_lanes;
+        }
+    }
 	
 	reflex select_next_path when: current_path = nil {
 		list<intersection> dst_nodes <- [intersection[264], intersection[281]];
@@ -86,16 +100,30 @@ species car parent: base_vehicle {
 	}
 }
 
-species motorbike parent: base_vehicle {
+species motorbike parent: base_vehicle {	
+	list normal_lanes <- [0, 1, 2, 3];
+	
 	init {
 		vehicle_length <- 2.0 #m;
 		max_speed <- rnd(30, 50) #km / #h;
 		max_acceleration <- rnd(1.5, 3.5);
 		right_side_driving <- true;
-		allowed_lanes <- [0, 1, 2, 3];
+		allowed_lanes <- normal_lanes;
 		num_lanes_occupied <- 1;
+		lane_change_limit <- 2;
 		color <- #red;
 	}
+	
+	reflex adapt_lane_policy when: dynamic_lane_policy {
+
+        bool jammed <- (real_speed < 10 #km/#h);
+
+        if (jammed) {
+            allowed_lanes <- [0,1,2,3,4,5];
+        } else {
+            allowed_lanes <- normal_lanes;
+        }
+    }
 	
 	reflex select_next_path when: current_path = nil {
 		list<intersection> dst_nodes <- [intersection[263], intersection[281]];
@@ -162,7 +190,8 @@ species brt_bus parent: base_vehicle {
 }
 
 experiment BRT type: gui {
-	parameter "Waiting time at each bus stop" var:bus_stop_duration min:0 max:10;
+	parameter "Enable other vehicles in the BRT lane" var:dynamic_lane_policy;
+	parameter "Waiting time at each bus stop" var:bus_stop_duration min:1 max:10;
 	parameter "Prob spawn for both car and motorbike at a step" var:prob_vehicle_spawn min:0.0 max: 1.0;
 	parameter "Prob spawn car/motorbike" var:prob_car_motor_spawn min:0.0 max: 1.0;
 	parameter "Traffic light change time" var:traffic_signal_time min:0 max:200;
