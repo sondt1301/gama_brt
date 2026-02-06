@@ -12,7 +12,7 @@ global {
 	
 	// Params to keep track of throughput
 	int monitored_intersection <- 43;
-	int intersection_pass_count <- 0;
+	int intersection_passenger_count <- 0;
 	// Params to keep track of avg speed
 	float brt_speed_sum <- 0.0;
 	int brt_speed_samples <- 0;
@@ -22,8 +22,7 @@ global {
 	list<float> brt_travel_times <- [];
 	list<float> brt_times_stop1 <- [];
 	list<float> brt_times_stop2 <- [];
-	list<float> brt_speed_series <- [];
-	
+	list<float> brt_speed_series <- [];	
 	
 	float seed <- 42.0;
 	bool dynamic_lane_policy <- false;
@@ -82,7 +81,7 @@ global {
     	ask (car + motorbike + brt_bus) {
 	        if ((location distance_to target.location) < 10) {
 	            if (!counted_at_intersection) {
-	                intersection_pass_count <- intersection_pass_count + 1;
+	                intersection_passenger_count <- intersection_passenger_count + passengers;
 	                counted_at_intersection <- true;
 	            }
 	        } else {
@@ -90,11 +89,11 @@ global {
 	        }
 	    }
 
-	    if intersection_pass_count > 0 {
+	    if intersection_passenger_count > 0 {
 	    	if (every(120 #s)) {
-	    		throughput_series <- throughput_series + intersection_pass_count;
-				write "Number of vehicle throughput every 2 mins: " + intersection_pass_count;
-				intersection_pass_count <- 0;
+	    		throughput_series <- throughput_series + intersection_passenger_count;
+				write "Number of passengers throughput every 2 mins: " + intersection_passenger_count;
+				intersection_passenger_count <- 0;
 			}
 	    }
 	}
@@ -127,6 +126,7 @@ species car parent: base_vehicle {
 		num_lanes_occupied <- 2;
 		lane_change_limit <- 2;
 		color <- #yellow;
+		passengers <- rnd(1,7);
 	}
 	
 	reflex adapt_lane_policy when: dynamic_lane_policy {
@@ -146,7 +146,7 @@ species car parent: base_vehicle {
 	reflex commute when: current_path != nil {
 		do drive;
 		
-		if (current_path = nil) {
+		if (current_path = nil) {			
 			do unregister;
 			do die;
 		}
@@ -165,6 +165,7 @@ species motorbike parent: base_vehicle {
 		num_lanes_occupied <- 1;
 		lane_change_limit <- 2;
 		color <- #red;
+		passengers <- rnd(1,2);
 	}
 	
 	reflex adapt_lane_policy when: dynamic_lane_policy {
@@ -186,7 +187,7 @@ species motorbike parent: base_vehicle {
 	reflex commute when: current_path != nil {
 		do drive;
 		
-		if (current_path = nil) {
+		if (current_path = nil) {		
 			do unregister;
 			do die;
 		}
@@ -211,6 +212,7 @@ species brt_bus parent: base_vehicle {
 		num_lanes_occupied <- 2;
 		lane_change_limit <- 0;
 		start_time <- time;
+		passengers <- rnd(2,80);
 	}
 	
 	reflex select_next_path when: current_path = nil {
@@ -260,7 +262,6 @@ species brt_bus parent: base_vehicle {
 	        write "Bus total travel time in seconds: " + total_travel_time;
 	        write "Segment times in seconds: " + stop_times;
 			
-			
 			do unregister;
 			do die;
 		}
@@ -288,7 +289,7 @@ experiment BRT type: gui {
 		    series_label_position: yaxis
     		x_label: "Time (2-min steps)"
 		    {
-		        data "Vehicles / 2 min" value: throughput_series color: #purple;
+		        data "Passengers / 2 min" value: throughput_series color: #purple;
 		    }
 		}
 		
