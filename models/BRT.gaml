@@ -22,6 +22,7 @@ global {
 	list<float> brt_travel_times <- [];
 	list<float> brt_times_stop1 <- [];
 	list<float> brt_times_stop2 <- [];
+	list<float> brt_speed_series <- [];
 	
 	
 	float seed <- 42.0;
@@ -103,6 +104,7 @@ global {
 	        if (brt_speed_samples > 0) {
 	            float avg_speed <- (brt_speed_sum / brt_speed_samples) * 3.6;
 	            write "Average free-running BRT speed (km/h): " + avg_speed;	
+	            brt_speed_series <- brt_speed_series + avg_speed;	            
 	        } else {
 	            write "No valid BRT speed samples";
 	        }
@@ -291,7 +293,7 @@ experiment BRT type: gui {
 		}
 		
 		display "BRT travel time" type: 2d {
-		    chart "BRT travel time" type: histogram
+		    chart "BRT travel time (seconds)" type: histogram
 		    style: stack
 		    x_label: "Bus index"
 		    {
@@ -306,6 +308,19 @@ experiment BRT type: gui {
 		        data "Remaining time to endpoint"
 		            value: brt_travel_times
 		            color: #red;
+		    }
+		}
+		display "BRT speed chart" type: 2d {
+		    chart "Average BRT speed (km/h)" type: series
+		    x_label: "Time (2-min steps)"
+		    y_label: "Speed (km/h)"
+		    {
+		        data "BRT speed"
+		            value: brt_speed_series
+		            color: #brown
+		            style: line
+		            marker: true;
+		
 		    }
 		}
 	}
