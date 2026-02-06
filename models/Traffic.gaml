@@ -1,4 +1,5 @@
 /**
+* ===== REFERENCE ===== 
 * Name: Traffic
 * Description: define species for traffic simulation
 * Author: Patrick Taillandier & Duc Pham
@@ -97,12 +98,18 @@ species intersection skills: [intersection_skill] {
 		} else {
 			draw circle(1) color: color;
 		}
+		
+		// Define bus stops
+		if (self.index = 124 or self.index = 256) {
+			draw circle(2) color: #blue;
+		}
 	}
 }
 
 species base_vehicle skills: [driving] {
 	rgb color <- rnd_color(255);
 	graph road_graph;
+	bool counted_at_intersection <- false;
 	
 	point compute_position {
 		// Shifts the position of the vehicle perpendicularly to the road,
