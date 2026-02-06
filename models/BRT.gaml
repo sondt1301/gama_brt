@@ -10,13 +10,27 @@ global {
 	
 	graph road_network;
 	
+	// Params to keep track of throughput
+	int monitored_intersection <- 43;
+	int intersection_pass_count <- 0;
+	// Params to keep track of avg speed
+	float brt_speed_sum <- 0.0;
+	int brt_speed_samples <- 0;
+	
+	// Lists for graph
+	list<int> throughput_series <- [];
+	list<float> brt_travel_times <- [];
+	list<float> brt_times_stop1 <- [];
+	list<float> brt_times_stop2 <- [];
+	
+	
 	float seed <- 42.0;
 	bool dynamic_lane_policy <- false;
 	int bus_stop_duration <- 5;
 	float prob_vehicle_spawn <- 0.5;
 	float prob_car_motor_spawn <- 0.3;
 	int traffic_signal_time <- 30;
-	int brt_cycle <- 50;
+	int brt_cycle <- 121;
 	
 	init {
 		create road from: shp_roads with: [num_lanes::int(read("lanes"))] {
@@ -60,6 +74,43 @@ global {
 			write "spawn bus";
 		}
 	}
+	
+	reflex count_intersection_flow {
+    	intersection target <- intersection[monitored_intersection];
+
+    	ask (car + motorbike + brt_bus) {
+	        if ((location distance_to target.location) < 10) {
+	            if (!counted_at_intersection) {
+	                intersection_pass_count <- intersection_pass_count + 1;
+	                counted_at_intersection <- true;
+	            }
+	        } else {
+	            counted_at_intersection <- false;
+	        }
+	    }
+
+	    if intersection_pass_count > 0 {
+	    	if (every(120 #s)) {
+	    		throughput_series <- throughput_series + intersection_pass_count;
+				write "Number of vehicle throughput every 2 mins: " + intersection_pass_count;
+				intersection_pass_count <- 0;
+			}
+	    }
+	}
+	
+	reflex report_brt_speed {
+	    if (every(120 #s)) {
+	        if (brt_speed_samples > 0) {
+	            float avg_speed <- (brt_speed_sum / brt_speed_samples) * 3.6;
+	            write "Average free-running BRT speed (km/h): " + avg_speed;	
+	        } else {
+	            write "No valid BRT speed samples";
+	        }
+	
+	        brt_speed_sum <- 0.0;
+	        brt_speed_samples <- 0;
+	    }
+	}	
 }
 
 species car parent: base_vehicle {
@@ -115,7 +166,7 @@ species motorbike parent: base_vehicle {
 	}
 	
 	reflex adapt_lane_policy when: dynamic_lane_policy {
-
+		
         bool jammed <- (real_speed < 10 #km/#h);
 
         if (jammed) {
@@ -141,11 +192,12 @@ species motorbike parent: base_vehicle {
 }
 
 species brt_bus parent: base_vehicle {
-	graph road_graph;        
 	int waiting <- 0;              
 	list<intersection> stops <- [intersection[124], intersection[256]];
 	int stop_index <- 0;      
-	
+	float start_time <- 0.0;
+	list<float> stop_times <- [];
+			
 	init {
 		road_graph <- road_network;
 		vehicle_length <- 18.0 #m;
@@ -155,6 +207,8 @@ species brt_bus parent: base_vehicle {
 		right_side_driving <- false;
 		lowest_lane <- 4;
 		num_lanes_occupied <- 2;
+		lane_change_limit <- 0;
+		start_time <- time;
 	}
 	
 	reflex select_next_path when: current_path = nil {
@@ -168,6 +222,9 @@ species brt_bus parent: base_vehicle {
 		if (stop_index < length(stops)) {
 			intersection target_stop <- stops[stop_index];
 			if ((self.location distance_to target_stop.location) < 10) {
+				// Record arrival time at the stop
+            	stop_times <- stop_times + (time - start_time);
+				
 				waiting <- bus_stop_duration;
 				stop_index <- stop_index + 1;
 				write "Bus stopping at stop " + target_stop.index;
@@ -180,9 +237,28 @@ species brt_bus parent: base_vehicle {
 			return;
 		}
 		
+		// Measure speed
+	    brt_speed_sum <- brt_speed_sum + speed;
+	    brt_speed_samples <- brt_speed_samples + 1;
+		
 		do drive;
 		
 		if (current_path = nil) {
+			// Record bus time
+			float total_travel_time <- time - start_time;
+			float stop1 <- (length(stop_times) > 0 ? stop_times[0] : 0);
+		    float stop2 <- (length(stop_times) > 1 ? stop_times[1] : 0);
+		
+		    ask world {
+		        brt_travel_times <- brt_travel_times + (total_travel_time - (stop1+stop2));
+		        brt_times_stop1 <- brt_times_stop1 + stop1;
+		        brt_times_stop2 <- brt_times_stop2 + stop2;
+		    }
+			
+	        write "Bus total travel time in seconds: " + total_travel_time;
+	        write "Segment times in seconds: " + stop_times;
+			
+			
 			do unregister;
 			do die;
 		}
@@ -204,6 +280,33 @@ experiment BRT type: gui {
 			species car aspect: base;
 			species motorbike aspect: base;
 			species brt_bus aspect: base;
+		}
+		display "Throughput chart" type: 2d{
+		    chart "Throughput over time" type: histogram
+		    series_label_position: yaxis
+    		x_label: "Time (2-min steps)"
+		    {
+		        data "Vehicles / 2 min" value: throughput_series color: #purple;
+		    }
+		}
+		
+		display "BRT travel time" type: 2d {
+		    chart "BRT travel time" type: histogram
+		    style: stack
+		    x_label: "Bus index"
+		    {
+		        data "Time at stop 1"
+		            value: brt_times_stop1
+		            color: #blue;
+		
+		        data "Time at stop 2"
+		            value: brt_times_stop2
+		            color: #green;
+		            
+		        data "Remaining time to endpoint"
+		            value: brt_travel_times
+		            color: #red;
+		    }
 		}
 	}
 }
